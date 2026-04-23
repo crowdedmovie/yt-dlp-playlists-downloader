@@ -11,7 +11,7 @@ People who needs to download multiples playlists, and apply proper metadata to t
 ## TODO
 
 - Add GUI
-- Get rid of using spreasheets to manage input data (usable, but really, using .ods file, UGH)
+- Replace .ods by .toml files (mushc easier to read, and to edit from multiple platforms that spreasheets)
 
 ## Features
 
