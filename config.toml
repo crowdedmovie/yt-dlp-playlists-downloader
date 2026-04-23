@@ -1,0 +1,8 @@
+[settings]
+output_dir = "Output"
+max_workers = 5
+keep_original_metadata = true
+enable_normalization = false
+
+# Optional:
+# cookies_file = "youtube_cookies.txt"

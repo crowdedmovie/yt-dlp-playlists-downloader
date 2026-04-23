@@ -1,25 +1,27 @@
-import os
-import sys
-import subprocess
 import argparse
+import os
+import re
+import shutil
+import subprocess
+import sys
+import tempfile
+import tomllib
+from concurrent.futures import ThreadPoolExecutor
+from io import BytesIO
+
 import requests
 from PIL import Image
-from io import BytesIO
 from mutagen.easyid3 import EasyID3
-from mutagen.id3 import ID3, APIC
-from concurrent.futures import ThreadPoolExecutor
-import re
-import pandas as pd
-import tempfile
-import shutil
+from mutagen.id3 import APIC, ID3
 
-SHEET_NAME = "Infos"
+DEFAULT_PLAYLISTS_FILE = "playlists.toml"
+DEFAULT_CONFIG_FILE = "config.toml"
 DEFAULT_OUTPUT_DIR = "Output"
 DEFAULT_MAX_WORKERS = 5
 DEFAULT_KEEP_ORIGINAL_METADATA = True
 DEFAULT_ENABLE_NORMALIZATION = False
 
-# --- Utilities ---
+
 def str_to_bool(value):
     normalized = value.strip().lower()
     if normalized in {"true", "1", "yes", "y", "on"}:
@@ -33,51 +35,54 @@ def str_to_bool(value):
 
 def parse_args():
     parser = argparse.ArgumentParser(
-        description="Download playlist tracks from a spreadsheet and apply metadata."
+        description="Download playlist tracks from a TOML file and apply metadata."
     )
     parser.add_argument(
-        "spreadsheet",
+        "playlists_file",
         nargs="?",
         help=(
-            "Path to the .ods spreadsheet to use. If omitted, the script scans the current "
-            "directory for .ods files and asks you to choose one."
+            "Path to the playlists TOML file. If omitted, the script uses "
+            f"{DEFAULT_PLAYLISTS_FILE} in the current directory."
+        ),
+    )
+    parser.add_argument(
+        "--config",
+        dest="config_file",
+        help=(
+            "Optional path to a config TOML file. If omitted, the script uses "
+            f"{DEFAULT_CONFIG_FILE} when present."
         ),
     )
     parser.add_argument(
         "--cookies",
         dest="cookies_file",
+        default=None,
         help="Optional path to a cookies file passed to yt-dlp.",
     )
     parser.add_argument(
         "--output-dir",
-        default=DEFAULT_OUTPUT_DIR,
-        help=(
-            f"Base output directory for downloaded files and covers. "
-            f"Default: {DEFAULT_OUTPUT_DIR}"
-        ),
+        default=None,
+        help=f"Base output directory for downloaded files and covers. Default: {DEFAULT_OUTPUT_DIR}",
     )
     parser.add_argument(
         "--max-workers",
         type=int,
-        default=DEFAULT_MAX_WORKERS,
-        help=(
-            "Maximum number of playlists to process in parallel. "
-            f"Default: {DEFAULT_MAX_WORKERS}"
-        ),
+        default=None,
+        help=f"Maximum number of playlists to process in parallel. Default: {DEFAULT_MAX_WORKERS}",
     )
     parser.add_argument(
         "--keep-original-metadata",
         type=str_to_bool,
-        default=DEFAULT_KEEP_ORIGINAL_METADATA,
+        default=None,
         help=(
-            "When spreadsheet Artist/Album/Year/Genre cells are empty, keep existing tags "
-            f"in downloaded files instead of clearing them. Default: {DEFAULT_KEEP_ORIGINAL_METADATA}"
+            "When artist/album/year/genre values are missing in the playlist entry, keep existing "
+            f"tags in downloaded files instead of clearing them. Default: {DEFAULT_KEEP_ORIGINAL_METADATA}"
         ),
     )
     parser.add_argument(
         "--enable-normalization",
         type=str_to_bool,
-        default=DEFAULT_ENABLE_NORMALIZATION,
+        default=None,
         help=(
             "Normalize downloaded MP3 files with FFmpeg loudness normalization after tagging. "
             f"Default: {DEFAULT_ENABLE_NORMALIZATION}"
@@ -86,111 +91,198 @@ def parse_args():
     return parser.parse_args()
 
 
-def validate_args(args):
-    if args.max_workers < 1:
-        print("--max-workers must be at least 1.")
+def load_toml_file(path, label):
+    try:
+        with open(path, "rb") as toml_file:
+            return tomllib.load(toml_file)
+    except FileNotFoundError:
+        print(f"{label} not found: {path}")
+        sys.exit(1)
+    except tomllib.TOMLDecodeError as exc:
+        print(f"Failed to parse {label} {path}: {exc}")
         sys.exit(1)
 
 
-def list_spreadsheet_files():
-    return sorted(
-        file for file in os.listdir(".")
-        if file.lower().endswith(".ods") and os.path.isfile(file)
-    )
+def resolve_playlists_file(playlists_arg):
+    playlists_file = playlists_arg or DEFAULT_PLAYLISTS_FILE
+    if not os.path.isfile(playlists_file):
+        print(f"Playlists file not found: {playlists_file}")
+        print("Create a playlists.toml file or pass a custom file path.")
+        sys.exit(1)
+    return playlists_file
 
 
-def prompt_for_spreadsheet(spreadsheet_files):
-    if len(spreadsheet_files) == 1:
-        selected = spreadsheet_files[0]
-        print(f"Using spreadsheet: {selected}")
-        return selected
-
-    print("Available spreadsheet files:")
-    for index, file_name in enumerate(spreadsheet_files, start=1):
-        print(f"{index}. {file_name}")
-
-    while True:
-        choice = input("Choose a spreadsheet by number: ").strip()
-        if not choice.isdigit():
-            print("Please enter a valid number.")
-            continue
-
-        selected_index = int(choice)
-        if 1 <= selected_index <= len(spreadsheet_files):
-            return spreadsheet_files[selected_index - 1]
-
-        print(f"Please enter a number between 1 and {len(spreadsheet_files)}.")
-
-
-def resolve_spreadsheet_path(spreadsheet_arg):
-    if spreadsheet_arg:
-        if not os.path.isfile(spreadsheet_arg):
-            print(f"Spreadsheet not found: {spreadsheet_arg}")
+def resolve_config_path(config_arg):
+    if config_arg:
+        if not os.path.isfile(config_arg):
+            print(f"Config file not found: {config_arg}")
             sys.exit(1)
-        return spreadsheet_arg
+        return config_arg
 
-    spreadsheet_files = list_spreadsheet_files()
-    if not spreadsheet_files:
-        print("No .ods spreadsheet files were found in the current directory.")
-        print("Add a spreadsheet file or create one from the documented template format.")
+    if os.path.isfile(DEFAULT_CONFIG_FILE):
+        return DEFAULT_CONFIG_FILE
+
+    return None
+
+
+def load_config(config_path):
+    if not config_path:
+        return {}
+    return load_toml_file(config_path, "Config file")
+
+
+def build_runtime_settings(args, config_data):
+    config_settings = config_data.get("settings", {})
+    if config_settings and not isinstance(config_settings, dict):
+        print("Config file error: [settings] must be a table.")
         sys.exit(1)
 
-    return prompt_for_spreadsheet(spreadsheet_files)
+    settings = {
+        "output_dir": DEFAULT_OUTPUT_DIR,
+        "max_workers": DEFAULT_MAX_WORKERS,
+        "keep_original_metadata": DEFAULT_KEEP_ORIGINAL_METADATA,
+        "enable_normalization": DEFAULT_ENABLE_NORMALIZATION,
+        "cookies_file": None,
+    }
+
+    for key in settings:
+        if key in config_settings:
+            settings[key] = config_settings[key]
+
+    if args.output_dir is not None:
+        settings["output_dir"] = args.output_dir
+    if args.max_workers is not None:
+        settings["max_workers"] = args.max_workers
+    if args.keep_original_metadata is not None:
+        settings["keep_original_metadata"] = args.keep_original_metadata
+    if args.enable_normalization is not None:
+        settings["enable_normalization"] = args.enable_normalization
+    if args.cookies_file is not None:
+        settings["cookies_file"] = args.cookies_file
+
+    validate_runtime_settings(settings)
+    return settings
 
 
-def validate_cookies_file(cookies_file):
-    if cookies_file and not os.path.isfile(cookies_file):
-        print(f"Cookies file not found: {cookies_file}")
+def validate_runtime_settings(settings):
+    if not isinstance(settings["output_dir"], str) or not settings["output_dir"].strip():
+        print("output_dir must be a non-empty string.")
         sys.exit(1)
+
+    if not isinstance(settings["max_workers"], int) or settings["max_workers"] < 1:
+        print("max_workers must be an integer greater than or equal to 1.")
+        sys.exit(1)
+
+    for key in ("keep_original_metadata", "enable_normalization"):
+        if not isinstance(settings[key], bool):
+            print(f"{key} must be a boolean value.")
+            sys.exit(1)
+
+    cookies_file = settings["cookies_file"]
+    if cookies_file is not None:
+        if not isinstance(cookies_file, str) or not cookies_file.strip():
+            print("cookies_file must be a non-empty string when provided.")
+            sys.exit(1)
+        if not os.path.isfile(cookies_file):
+            print(f"Cookies file not found: {cookies_file}")
+            sys.exit(1)
+
+
+def load_playlist_entries(playlists_file):
+    playlists_data = load_toml_file(playlists_file, "Playlists file")
+    playlists = playlists_data.get("playlists")
+
+    if playlists is None:
+        print(f"Playlists file error: {playlists_file} must define at least one [[playlists]] entry.")
+        sys.exit(1)
+
+    if not isinstance(playlists, list):
+        print("Playlists file error: playlists must be an array of tables.")
+        sys.exit(1)
+
+    tasks = []
+    for index, playlist in enumerate(playlists, start=1):
+        if not isinstance(playlist, dict):
+            print(f"Playlists file error: entry #{index} must be a table.")
+            sys.exit(1)
+
+        url = require_string_field(playlist, "url", index)
+        artist = optional_string_field(playlist, "artist")
+        album = optional_string_field(playlist, "album")
+        year = optional_year_field(playlist, index)
+        genre = optional_string_field(playlist, "genre")
+        cover_url = optional_string_field(playlist, "cover_url")
+
+        tasks.append((url, artist, album, year, genre, cover_url))
+
+    if not tasks:
+        print("No playlists found in the playlists file.")
+        sys.exit(0)
+
+    return tasks
+
+
+def require_string_field(entry, field_name, index):
+    value = entry.get(field_name)
+    if not isinstance(value, str) or not value.strip():
+        print(f"Playlists file error: entry #{index} requires a non-empty '{field_name}' value.")
+        sys.exit(1)
+    return value.strip()
+
+
+def optional_string_field(entry, field_name):
+    value = entry.get(field_name)
+    if value is None:
+        return ""
+    if not isinstance(value, str):
+        print(f"Playlists file error: '{field_name}' must be a string when provided.")
+        sys.exit(1)
+    return value.strip()
+
+
+def optional_year_field(entry, index):
+    value = entry.get("year")
+    if value is None:
+        return ""
+    if isinstance(value, int):
+        return str(value)
+    if isinstance(value, str) and value.strip():
+        return value.strip()
+    print(f"Playlists file error: entry #{index} field 'year' must be an integer or non-empty string.")
+    sys.exit(1)
 
 
 def sanitize_name(name: str | None) -> str:
     if name is None:
         return "Unknown"
 
-    # Convert everything to string first
     name = str(name)
-
-    # First, normalize the string
     cleaned = name.strip()
-    
-    # Define all possible quote characters we want to remove
-    quote_chars = [
-        '"',       # regular double quote (U+0022)
-        '\uFF02',  # fullwidth double quote (＂, U+FF02)
-        "'",       # regular single quote (U+0027)
-        '\uFF07'   # fullwidth single quote (＇, U+FF07)
-    ]
-    
-    # Remove quotes from start and end
+
+    quote_chars = ['"', "\uFF02", "'", "\uFF07"]
+
     while len(cleaned) > 0 and cleaned[0] in quote_chars:
         cleaned = cleaned[1:]
     while len(cleaned) > 0 and cleaned[-1] in quote_chars:
         cleaned = cleaned[:-1]
-    
-    # Remove any remaining quotes in the middle
+
     for quote in quote_chars:
-        cleaned = cleaned.replace(quote, '')
-    
-    # Remove numeric prefixes like X., X , X-, X - where X is 1-999
-    cleaned = re.sub(r'^\s*(?:\d{1,3}\s*[.-]\s*|\d{1,3}\s+)', '', cleaned)
-    
-    # Clean up any remaining special characters and whitespace
-    cleaned = re.sub(r'[<>:"/\\|?*]+', '', cleaned)
-    cleaned = cleaned.strip().rstrip('.')
-    
+        cleaned = cleaned.replace(quote, "")
+
+    cleaned = re.sub(r"^\s*(?:\d{1,3}\s*[.-]\s*|\d{1,3}\s+)", "", cleaned)
+    cleaned = re.sub(r'[<>:"/\\|?*]+', "", cleaned)
+    cleaned = cleaned.strip().rstrip(".")
+
     return cleaned or "Unknown"
 
-# --- Cover handling ---
+
 def download_and_prepare_cover(url_or_path, album, artist, target_dir, cover_dir):
     try:
-        if url_or_path.startswith(('http://', 'https://')):
-            # Handle URL
+        if url_or_path.startswith(("http://", "https://")):
             response = requests.get(url_or_path, timeout=15)
             response.raise_for_status()
             img = Image.open(BytesIO(response.content)).convert("RGB")
         else:
-            # Handle local file path
             if not os.path.isfile(url_or_path):
                 print(f"Local cover file not found: {url_or_path}")
                 return None
@@ -201,20 +293,18 @@ def download_and_prepare_cover(url_or_path, album, artist, target_dir, cover_dir
         safe_artist = sanitize_name(artist)
         cover_filename = f"{safe_artist}-{safe_album}-cover.jpg"
 
-        # Save in album folder
         album_cover_path = os.path.join(target_dir, cover_filename)
         img.save(album_cover_path, "JPEG")
 
-        # Save in global Covers folder
         global_cover_path = os.path.join(cover_dir, cover_filename)
         img.save(global_cover_path, "JPEG")
 
         return album_cover_path
-    except Exception as e:
-        print(f"Failed to process cover: {e}")
+    except Exception as exc:
+        print(f"Failed to process cover: {exc}")
         return None
 
-# --- Metadata tagging ---
+
 def apply_metadata(
     file_path,
     artist,
@@ -233,59 +323,44 @@ def apply_metadata(
 
     if artist:
         audio["artist"] = artist
-    else:
-        if not keep_original_metadata and "artist" in audio:
-            del audio["artist"]
+    elif not keep_original_metadata and "artist" in audio:
+        del audio["artist"]
 
     if album:
         audio["album"] = album
-    else:
-        if not keep_original_metadata and "album" in audio:
-            del audio["album"]
+    elif not keep_original_metadata and "album" in audio:
+        del audio["album"]
 
     if year:
         audio["date"] = year
-    else:
-        # Remove any date/year related tags if present only when not keeping originals
-        if not keep_original_metadata:
-            for k in ("date", "year"):
-                if k in audio:
-                    del audio[k]
+    elif not keep_original_metadata:
+        for key in ("date", "year"):
+            if key in audio:
+                del audio[key]
 
     if genre:
         audio["genre"] = genre
-    else:
-        if not keep_original_metadata and "genre" in audio:
-            del audio["genre"]
+    elif not keep_original_metadata and "genre" in audio:
+        del audio["genre"]
 
     audio["tracknumber"] = str(tracknum)
     audio["title"] = title
 
-    # remove unwanted tags
     for tag in ["albumartist", "discnumber", "comment"]:
         if tag in audio:
             del audio[tag]
 
     audio.save(file_path)
 
-    # Cover art handling
-    # If a custom cover is provided, replace any existing APIC with it.
-    # If no custom cover is provided, preserve any existing embedded artwork (e.g., from yt-dlp).
     id3 = ID3(file_path)
     if cover_path and os.path.exists(cover_path):
         id3.delall("APIC")
         with open(cover_path, "rb") as img:
-            id3.add(APIC(mime="image/jpeg", type=3, desc=u"Cover", data=img.read()))
+            id3.add(APIC(mime="image/jpeg", type=3, desc="Cover", data=img.read()))
         id3.save(file_path)
-    else:
-        # No custom cover: do not touch APIC frames
-        pass
+
 
 def analyze_loudness(file_path):
-    """
-    Analyze file loudness using FFmpeg ebur128 filter.
-    Returns integrated loudness in LUFS (float) or None if failed.
-    """
     cmd = [
         "ffmpeg", "-i", file_path,
         "-filter_complex", "ebur128=framelog=verbose",
@@ -296,7 +371,6 @@ def analyze_loudness(file_path):
         print(f"FFmpeg analysis failed for {file_path}: {result.stderr}")
         return None
 
-    # Look for the line starting with 'I:' and ending with 'LUFS'
     match = re.search(r"I:\s*(-?\d+(?:\.\d+)?) LUFS", result.stderr)
     if match:
         return float(match.group(1))
@@ -306,10 +380,6 @@ def analyze_loudness(file_path):
 
 
 def normalize_audio(input_path, target_lufs=-15.0, tolerance=3.0):
-    """
-    Normalize audio if outside target LUFS range, otherwise skip.
-    Returns True if successful, False otherwise.
-    """
     try:
         loudness = analyze_loudness(input_path)
         if loudness is not None:
@@ -317,17 +387,16 @@ def normalize_audio(input_path, target_lufs=-15.0, tolerance=3.0):
         else:
             print(f"Loudness for {input_path}: unknown, proceeding with normalization")
 
-        # Skip normalization only if loudness is known and within tolerance
         if loudness is not None and abs(loudness - target_lufs) <= tolerance:
-            print(f"Skipping normalization for {os.path.basename(input_path)} "
-                  f"(already {loudness:.1f} LUFS)")
-            return True  # Nothing to do
+            print(
+                f"Skipping normalization for {os.path.basename(input_path)} "
+                f"(already {loudness:.1f} LUFS)"
+            )
+            return True
 
-        # Prepare temporary output path
         temp_dir = tempfile.gettempdir()
         output_path = os.path.join(temp_dir, os.path.basename(input_path))
 
-        # Run FFmpeg normalization
         cmd = [
             "ffmpeg",
             "-y",
@@ -349,11 +418,11 @@ def normalize_audio(input_path, target_lufs=-15.0, tolerance=3.0):
         print(f"Normalization completed for {input_path}")
         return True
 
-    except Exception as e:
-        print(f"Error normalizing audio {input_path}: {str(e)}")
+    except Exception as exc:
+        print(f"Error normalizing audio {input_path}: {exc}")
         return False
 
-# --- Playlist processing ---
+
 def download_playlist(
     url,
     artist,
@@ -370,12 +439,10 @@ def download_playlist(
     if cover_dir is None:
         cover_dir = os.path.join(output_dir, "Covers")
 
-    # Create artist directory if artist is provided
     artist_name = sanitize_name(artist) if artist else "Unknown Artist"
     artist_dir = os.path.join(output_dir, artist_name)
     os.makedirs(artist_dir, exist_ok=True)
-    
-    # Create album directory inside artist directory with format 'Album - Artist'
+
     album_name = sanitize_name(album) if album else "Unknown Album"
     folder_name = f"{artist_name} - {album_name}" if artist_name != "Unknown Artist" else album_name
     target_dir = os.path.join(artist_dir, folder_name)
@@ -386,7 +453,6 @@ def download_playlist(
         if cover_url else None
     )
 
-    # Download playlist
     yt_args = [
         "yt-dlp",
         "--sleep-requests", "0",
@@ -394,7 +460,6 @@ def download_playlist(
     ]
     if cookies_file:
         yt_args += ["--cookies", cookies_file]
-    # If no custom cover provided, embed original thumbnail and convert to JPG for MP3 compatibility
     if not cover_url:
         yt_args += ["--embed-thumbnail", "--convert-thumbnails", "jpg"]
     yt_args += [
@@ -404,12 +469,11 @@ def download_playlist(
     download_result = subprocess.run(yt_args)
 
     files_to_process = []
-    for file in sorted(os.listdir(target_dir)):
-        if file.endswith('.mp3'):
-            file_path = os.path.join(target_dir, file)
-            # Apply metadata first
-            track_num = file.split(' - ')[0]
-            title = ' - '.join(file.split(' - ')[1:]).replace('.mp3', '')
+    for file_name in sorted(os.listdir(target_dir)):
+        if file_name.endswith(".mp3"):
+            file_path = os.path.join(target_dir, file_name)
+            track_num = file_name.split(" - ")[0]
+            title = " - ".join(file_name.split(" - ")[1:]).replace(".mp3", "")
             apply_metadata(
                 file_path,
                 artist,
@@ -428,15 +492,14 @@ def download_playlist(
         for file_path, _ in files_to_process:
             normalize_audio(file_path)
 
-    # Rename after normalization
-    for file in sorted(os.listdir(target_dir)):
-        if file.endswith('.mp3'):
-            old_path = os.path.join(target_dir, file)
-            title = os.path.splitext(file)[0].split(' - ', 1)[-1]
+    for file_name in sorted(os.listdir(target_dir)):
+        if file_name.endswith(".mp3"):
+            old_path = os.path.join(target_dir, file_name)
+            title = os.path.splitext(file_name)[0].split(" - ", 1)[-1]
             new_path = os.path.join(target_dir, f"{title}.mp3")
             if os.path.normcase(os.path.abspath(old_path)) != os.path.normcase(os.path.abspath(new_path)):
                 os.replace(old_path, new_path)
-                print(f"Renamed: {file} -> {os.path.basename(new_path)}")
+                print(f"Renamed: {file_name} -> {os.path.basename(new_path)}")
 
     if download_result.returncode != 0:
         if files_to_process:
@@ -447,65 +510,39 @@ def download_playlist(
         else:
             raise subprocess.CalledProcessError(download_result.returncode, yt_args)
 
-# --- Main ---
+
 def main():
     args = parse_args()
-    validate_args(args)
-    spreadsheet_path = resolve_spreadsheet_path(args.spreadsheet)
-    validate_cookies_file(args.cookies_file)
-    output_dir = args.output_dir
+    playlists_file = resolve_playlists_file(args.playlists_file)
+    config_path = resolve_config_path(args.config_file)
+    config_data = load_config(config_path)
+    settings = build_runtime_settings(args, config_data)
+    tasks = load_playlist_entries(playlists_file)
+
+    output_dir = settings["output_dir"]
     cover_dir = os.path.join(output_dir, "Covers")
     os.makedirs(output_dir, exist_ok=True)
     os.makedirs(cover_dir, exist_ok=True)
 
-    # Read the spreadsheet, headers are in the first row
-    try:
-        df = pd.read_excel(spreadsheet_path, engine="odf", sheet_name=SHEET_NAME, usecols=range(6))
-        # Ensure column names are correct
-        df.columns = ['URL', 'Artist', 'Album', 'Year', 'Genre', 'Cover_URL']
-    except ValueError as e:
-        print(f"Failed to read sheet '{SHEET_NAME}' from {spreadsheet_path}: {e}")
-        sys.exit(1)
-    except Exception as e:
-        print(f"Failed to read {spreadsheet_path}: {e}")
-        sys.exit(1)
-
-    tasks = []
-    for _, row in df.iterrows():
-        # Convert all values to string and strip whitespace
-        url = str(row['URL']).strip() if not pd.isna(row['URL']) else None
-        artist = str(row['Artist']).strip() if not pd.isna(row['Artist']) else ""
-        album = str(row['Album']).strip() if not pd.isna(row['Album']) else ""
-        year = str(int(row['Year'])) if not pd.isna(row['Year']) else ""
-        genre = str(row['Genre']).strip() if not pd.isna(row['Genre']) else ""
-        cover = str(row['Cover_URL']).strip() if not pd.isna(row['Cover_URL']) else ""
-
-        if url:
-            tasks.append((url, artist, album, year, genre, cover))
-
-    if not tasks:
-        print("No playlists found in the spreadsheet.")
-        sys.exit(0)
-
-    # Use existing ThreadPoolExecutor for downloads
-    with ThreadPoolExecutor(max_workers=args.max_workers) as executor:
+    with ThreadPoolExecutor(max_workers=settings["max_workers"]) as executor:
         futures = [
             executor.submit(
                 download_playlist,
                 *task,
-                args.cookies_file,
+                settings["cookies_file"],
                 output_dir,
                 cover_dir,
-                args.keep_original_metadata,
-                args.enable_normalization,
+                settings["keep_original_metadata"],
+                settings["enable_normalization"],
             )
             for task in tasks
         ]
         for future in futures:
             try:
                 future.result()
-            except Exception as e:
-                print(f"Error in playlist task: {e}")
+            except Exception as exc:
+                print(f"Error in playlist task: {exc}")
+
 
 if __name__ == "__main__":
     main()

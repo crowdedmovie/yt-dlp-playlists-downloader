@@ -1,36 +1,32 @@
 # yt-dlp-playlists-downloader
 
-`yt-dlp-playlists-downloader` is an alpha Python script that downloads playlist tracks with `yt-dlp`, organizes them into artist and album folders, and applies ID3 metadata from an OpenDocument spreadsheet (`.ods`).
+`yt-dlp-playlists-downloader` is an alpha Python script that downloads playlist tracks with `yt-dlp`, organizes them into artist and album folders, and applies ID3 metadata from TOML files.
 
-It is suitable for YouTube playlists and also for SoundCloud playlists, because source support comes from `yt-dlp`.
+It works well for YouTube and SoundCloud playlists because media extraction is handled by `yt-dlp`.
 
-## Who is this for
+## Who Is This For
 
-People who needs to download multiples playlists, and apply proper metadata to them, for easy import to music player / servers.
-
-## TODO
-
-- Add GUI
-- Replace .ods by .toml files (mushc easier to read, and to edit from multiple platforms that spreasheets)
+People who want to download multiple playlists and tag them cleanly for use in music players or media servers.
 
 ## Features
 
-- Reads playlist jobs from a `.ods` spreadsheet
-- Supports either a direct spreadsheet path or interactive spreadsheet selection
+- Reads playlist entries from `playlists.toml`
+- Reads persistent defaults from `config.toml`
+- Lets CLI flags override config values for one-off runs
 - Downloads playlists as MP3 files
 - Organizes output under `Output/<Artist>/<Artist - Album>/` by default
 - Applies artist, album, year, genre, title, and track number metadata
 - Embeds a custom cover image or preserves the original downloaded thumbnail
-- Can normalize audio with FFmpeg when enabled via CLI
+- Can normalize audio with FFmpeg
 - Processes multiple playlists in parallel
 
 ## Alpha Status
 
-This project is currently in alpha. The workflow is usable, but the interface is still simple and some configuration is still code-based.
+This project is currently in alpha. The workflow is usable, but the interface and data model may still evolve.
 
 ## Requirements
 
-- Python 3
+- Python 3.11 or newer
 - `yt-dlp`
 - FFmpeg
 
@@ -53,31 +49,86 @@ python -m pip install -U "yt-dlp[default]"
 
 4. Make sure `ffmpeg` is installed and available in your `PATH`.
 
-## Spreadsheet Format
+## Data Files
 
-The script reads a sheet named `Infos`.
+The project now uses two TOML files:
 
-It expects the first 6 columns in this order:
+- `playlists.toml`: playlist entries and metadata
+- `config.toml`: persistent runtime defaults
 
-1. `URL`
-2. `Artist`
-3. `Album`
-4. `Year`
-5. `Genre`
-6. `Cover_URL`
+CLI flags can override values from `config.toml` when needed.
 
-Each non-empty row represents one playlist to process.
+## `playlists.toml` Format
 
-Example structure:
+Each playlist is defined as a `[[playlists]]` entry.
 
-| URL | Artist | Album | Year | Genre | Cover_URL |
-| --- | --- | --- | --- | --- | --- |
-| `https://www.youtube.com/playlist?...` | `Artist Name` | `Album Name` | `2024` | `Rock` | `https://example.com/cover.jpg` |
-| `https://soundcloud.com/...` | `Artist Name` | `Mixtape Name` | `2023` | `Electronic` | `test.jpg` |
+Example:
+
+```toml
+[[playlists]]
+url = "https://www.youtube.com/playlist?list=YOUR_PLAYLIST_ID"
+artist = "Artist Name"
+album = "Album Name"
+year = 2024
+genre = "Genre"
+cover_url = "https://example.com/cover.jpg"
+
+[[playlists]]
+url = "https://soundcloud.com/artist/sets/example-playlist"
+artist = "Another Artist"
+album = "Example Mixtape"
+genre = "Electronic"
+```
+
+Supported playlist fields:
+
+- `url`: required
+- `artist`: optional
+- `album`: optional
+- `year`: optional
+- `genre`: optional
+- `cover_url`: optional
+
+Optional fields may be omitted entirely.
+
+## `config.toml` Format
+
+`config.toml` stores persistent defaults for runtime behavior.
+
+Example:
+
+```toml
+[settings]
+output_dir = "Output"
+max_workers = 5
+keep_original_metadata = true
+enable_normalization = false
+
+# Optional:
+# cookies_file = "youtube_cookies.txt"
+```
+
+Supported settings:
+
+- `output_dir`
+- `max_workers`
+- `keep_original_metadata`
+- `enable_normalization`
+- `cookies_file`
+
+## Config Precedence
+
+Settings are resolved in this order:
+
+1. CLI flags
+2. `config.toml`
+3. Built-in defaults
+
+This means `config.toml` is used for usual preferences, while CLI flags remain available for temporary overrides.
 
 ## Cover Image Behavior
 
-The `Cover_URL` field can contain:
+The `cover_url` field can contain:
 
 - A remote image URL such as `http://...` or `https://...`
 - A local file path to an image
@@ -88,30 +139,34 @@ If no custom cover is provided, the script asks `yt-dlp` to embed the source thu
 
 ## Usage
 
-Run with an explicit spreadsheet:
-
-```bash
-python main.py my_playlists.ods
-```
-
-Run with an explicit spreadsheet and optional cookies file:
-
-```bash
-python main.py my_playlists.ods --cookies youtube_cookies.txt
-```
-
-Run without a spreadsheet argument to select from `.ods` files found in the current directory:
+Run with the default files in the current directory:
 
 ```bash
 python main.py
 ```
 
-If no `.ods` files are found, the script exits with a message telling you to add one.
-
-Run with additional runtime options:
+Run with a custom playlists file:
 
 ```bash
-python main.py my_playlists.ods --cookies youtube_cookies.txt --output-dir MyMusic --max-workers 3 --keep-original-metadata false --enable-normalization true
+python main.py my_playlists.toml
+```
+
+Run with a custom playlists file and cookies:
+
+```bash
+python main.py my_playlists.toml --cookies youtube_cookies.txt
+```
+
+Run with a custom config file:
+
+```bash
+python main.py my_playlists.toml --config my_config.toml
+```
+
+Run with runtime overrides:
+
+```bash
+python main.py my_playlists.toml --config my_config.toml --output-dir MyMusic --max-workers 3 --keep-original-metadata false --enable-normalization true
 ```
 
 Show the built-in CLI help:
@@ -122,24 +177,13 @@ python main.py --help
 
 ## CLI Options
 
-- `spreadsheet`: Optional path to the `.ods` file. If omitted, the script scans the current directory and prompts you to choose one.
-- `--cookies`: Optional cookies file passed to `yt-dlp`.
+- `playlists_file`: Optional path to the playlists TOML file. Default: `playlists.toml`
+- `--config`: Optional path to a config TOML file. If omitted, the script uses `config.toml` when present.
+- `--cookies`: Optional cookies file passed to `yt-dlp`
 - `--output-dir`: Base folder for downloads and the shared `Covers/` directory. Default: `Output`
 - `--max-workers`: Number of playlists processed in parallel. Default: `5`
-- `--keep-original-metadata`: `true` or `false`. When spreadsheet metadata fields are empty, keep existing tags if `true`, or clear them if `false`. Default: `true`
-- `--enable-normalization`: `true` or `false`. Enables FFmpeg loudness normalization after download and tagging (requiere some CPU usage, slow down the overall process). Default: `false`
-
-## Cookies
-
-Some playlist sources or account-restricted content may require a cookies file.
-
-Cookies are optional and are only passed to `yt-dlp` when you provide them with:
-
-```bash
-python main.py my_playlists.ods --cookies youtube_cookies.txt
-```
-
-Do not commit personal cookies files to GitHub.
+- `--keep-original-metadata`: `true` or `false`. When playlist metadata fields are missing, keep existing tags if `true`, or clear them if `false`. Default: `true`
+- `--enable-normalization`: `true` or `false`. Enables FFmpeg loudness normalization after download and tagging. Default: `false`
 
 ## Output Structure
 
@@ -154,18 +198,9 @@ Output/
       Artist Name-Album Name-cover.jpg
 ```
 
-## Defaults
-
-The script currently uses these defaults unless overridden with CLI arguments:
-
-- `SHEET_NAME = "Infos"`
-- `OUTPUT_DIR = "Output"`
-- `MAX_WORKERS = 5`
-- `KEEP_ORIGINAL_METADATA = True`
-- `ENABLE_NORMALIZATION = False`
-
 ## Notes
 
 - Supported platforms depend on `yt-dlp`.
 - YouTube and SoundCloud playlists are both supported use cases.
-- Local `.ods` files, cookies files, and generated output folders should stay untracked in Git.
+- `config.toml` and `playlists.toml` are editable by hand and intended to replace the old spreadsheet workflow.
+- Cookies files and generated output folders should stay untracked in Git.
