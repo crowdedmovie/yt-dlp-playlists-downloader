@@ -276,6 +276,23 @@ def sanitize_name(name: str | None) -> str:
     return cleaned or "Unknown"
 
 
+def normalize_track_title(title, album, artist):
+    normalized_title = str(title).strip()
+
+    if artist and album:
+        prefix_pattern = re.compile(
+            rf"^\s*{re.escape(artist.strip())}\s*-\s*{re.escape(album.strip())}\s*-\s*",
+            re.IGNORECASE,
+        )
+        normalized_title = prefix_pattern.sub("", normalized_title, count=1).strip()
+
+    return normalized_title or "Unknown"
+
+
+def build_final_track_filename(title, album, artist):
+    return f"{sanitize_name(normalize_track_title(title, album, artist))}.mp3"
+
+
 def download_and_prepare_cover(url_or_path, album, artist, target_dir, cover_dir):
     try:
         if url_or_path.startswith(("http://", "https://")):
@@ -473,7 +490,8 @@ def download_playlist(
         if file_name.endswith(".mp3"):
             file_path = os.path.join(target_dir, file_name)
             track_num = file_name.split(" - ")[0]
-            title = " - ".join(file_name.split(" - ")[1:]).replace(".mp3", "")
+            raw_title = " - ".join(file_name.split(" - ")[1:]).replace(".mp3", "")
+            title = normalize_track_title(raw_title, album, artist)
             apply_metadata(
                 file_path,
                 artist,
@@ -495,8 +513,10 @@ def download_playlist(
     for file_name in sorted(os.listdir(target_dir)):
         if file_name.endswith(".mp3"):
             old_path = os.path.join(target_dir, file_name)
-            title = os.path.splitext(file_name)[0].split(" - ", 1)[-1]
-            new_path = os.path.join(target_dir, f"{title}.mp3")
+            raw_title = os.path.splitext(file_name)[0].split(" - ", 1)[-1]
+            title = normalize_track_title(raw_title, album, artist)
+            new_file_name = build_final_track_filename(title, album, artist)
+            new_path = os.path.join(target_dir, new_file_name)
             if os.path.normcase(os.path.abspath(old_path)) != os.path.normcase(os.path.abspath(new_path)):
                 os.replace(old_path, new_path)
                 print(f"Renamed: {file_name} -> {os.path.basename(new_path)}")
