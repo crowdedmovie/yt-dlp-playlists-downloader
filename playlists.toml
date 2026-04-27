@@ -2,14 +2,13 @@
 url = "https://www.youtube.com/playlist?list=YOUR_PLAYLIST_ID"
 artist = "Artist Name"
 album = "Album Name"
-year = 2024
+year = "2024"
 genre = "Genre"
 cover_url = "https://example.com/cover.jpg"
 
 [[playlists]]
 url = "https://soundcloud.com/artist/sets/example-playlist"
-artist = "Another Artist"
+artist = "artits 2"
 album = "Example Mixtape"
+year = "2026"
 genre = "Electronic"
-# cover_url can also point to a local file:
-# cover_url = "cover.jpg"
