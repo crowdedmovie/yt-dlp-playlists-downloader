@@ -13,6 +13,7 @@ People who want to download multiple playlists and tag them cleanly for use in m
 - Reads playlist entries from `playlists.toml`
 - Reads persistent defaults from `config.toml`
 - Lets CLI flags override config values for one-off runs
+- Includes a PyQt6 GUI wrapper for the TOML workflow
 - Downloads playlists as MP3 files
 - Organizes output under `Output/<Artist>/<Artist - Album>/` by default
 - Applies artist, album, year, genre, title, and track number metadata
@@ -175,6 +176,20 @@ Show the built-in CLI help:
 python main.py --help
 ```
 
+Run the GUI:
+
+```bash
+python -m gui.app
+```
+
+The GUI keeps the same TOML workflow as the CLI. It provides file pickers for playlists, config, output, and cookies; runtime controls for max workers, metadata preservation, and normalization; an editable playlist table; and a log area that streams downloader output.
+
+Use `Add Row`, `Remove Row`, and `Save Playlists` to edit the selected `playlists.toml` file from the table. Use `Refresh Preview` to reload playlist rows from disk after external edits.
+
+The GUI layout is loaded from `gui/ui/main_window.ui`, so UI layout changes should be made there with Qt Designer. The window icon loads from `gui/assets/icon.png` when that file is present.
+
+Each CLI or GUI download run writes a timestamped local log file under `logs/`. The log includes the resolved runtime settings plus `yt-dlp` and script output. Use `--log-file custom.log` on the CLI to choose a specific log path.
+
 ## CLI Options
 
 - `playlists_file`: Optional path to the playlists TOML file. Default: `playlists.toml`
@@ -204,3 +219,4 @@ Output/
 - YouTube and SoundCloud playlists are both supported use cases.
 - `config.toml` and `playlists.toml` are editable by hand and intended to replace the old spreadsheet workflow.
 - Cookies files and generated output folders should stay untracked in Git.
+- App icon from https://www.flaticon.com.
