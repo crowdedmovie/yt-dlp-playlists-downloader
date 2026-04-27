@@ -1,3 +1,21 @@
+Metadata-Version: 2.4
+Name: ytdlp-playlists-downloader
+Version: 0.1.0
+Summary: Download playlist tracks with yt-dlp, apply metadata from TOML, and optionally use a PyQt6 GUI.
+Author: crowdedmovie
+License: GPLv3
+Requires-Python: >=3.11
+Description-Content-Type: text/markdown
+License-File: LICENSE
+Requires-Dist: requests>=2.31.0
+Requires-Dist: Pillow>=10.0.0
+Requires-Dist: mutagen>=1.47.0
+Requires-Dist: PyQt6<7,>=6.7
+Requires-Dist: qtpy<3,>=2.4
+Requires-Dist: qt-themes>=0.4.0
+Requires-Dist: qt-material-icons>=0.5.0
+Dynamic: license-file
+
 # yt-dlp-playlists-downloader
 
 `yt-dlp-playlists-downloader` is an alpha Python app that downloads playlist tracks with `yt-dlp`, organizes them into artist and album folders, and applies ID3 metadata from TOML files.
@@ -219,6 +237,6 @@ Output/
 - Supported platforms depend on `yt-dlp`.
 - YouTube and SoundCloud playlists are both supported use cases.
 - `config.toml` and `playlists.toml` are editable by hand and intended to replace the old spreadsheet workflow.
-- Cookies files and generated output foldpers should stay untracked in Git.
+- Cookies files and generated output folders should stay untracked in Git.
 - App icon from https://www.flaticon.com.
 - `python main.py` and `python -m gui.app` remain available as compatibility wrappers when running from the repository checkout.

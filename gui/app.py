@@ -1,29 +1,15 @@
-"""GUI application entrypoint."""
+"""Compatibility entrypoint for the packaged GUI."""
 
 from __future__ import annotations
 
-import os
 import sys
 from pathlib import Path
 
-os.environ.setdefault("QT_API", "pyqt6")
+src_path = Path(__file__).resolve().parents[1] / "src"
+if str(src_path) not in sys.path:
+    sys.path.insert(0, str(src_path))
 
-if __package__ in (None, ""):
-    package_parent = Path(__file__).resolve().parents[1]
-    if str(package_parent) not in sys.path:
-        sys.path.insert(0, str(package_parent))
-    from gui.main_window import MainWindow
-    from gui.theme_service import ensure_app
-else:
-    from .main_window import MainWindow
-    from .theme_service import ensure_app
-
-
-def main() -> int:
-    app = ensure_app()
-    window = MainWindow()
-    window.show()
-    return app.exec()
+from ytdlp_playlists_downloader.gui.app import main
 
 
 if __name__ == "__main__":
