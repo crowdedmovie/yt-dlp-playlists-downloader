@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "yt-dlp-playlists-downloader"
-version = "0.1.0"
+version = "1.0.0"
 description = "Download playlist tracks with yt-dlp, apply metadata from TOML, and optionally use a PyQt6 GUI."
 readme = "README.md"
 requires-python = ">=3.11"
@@ -22,6 +22,8 @@ dependencies = [
 
 [project.scripts]
 yt-dlp-playlists-downloader = "yt_dlp_playlists_downloader.cli:main"
+
+[project.gui-scripts]
 yt-dlp-playlists-downloader-gui = "yt_dlp_playlists_downloader.gui.app:main"
 
 [tool.setuptools]
