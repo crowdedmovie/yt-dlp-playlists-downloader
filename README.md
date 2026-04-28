@@ -1,8 +1,12 @@
 # yt-dlp-playlists-downloader
 
-`yt-dlp-playlists-downloader` is an alpha Python app that downloads playlist tracks with `yt-dlp`, organizes them into artist and album folders, and applies ID3 metadata from TOML files.
+`yt-dlp-playlists-downloader` is a Python app that downloads playlist tracks with `yt-dlp`, organizes them into artist and album folders, and applies ID3 metadata from TOML files.
 
 It works well for YouTube and SoundCloud playlists because media extraction is handled by `yt-dlp`.
+
+## Preview
+
+![App preview](assets/preview1.png)
 
 ## Who Is This For
 
@@ -10,26 +14,21 @@ People who want to download multiple playlists and tag them cleanly for use in m
 
 ## Features
 
-- Reads playlist entries from `playlists.toml`
-- Reads persistent defaults from `config.toml`
-- Lets CLI flags override config values for one-off runs
-- Includes a PyQt6 GUI wrapper for the TOML workflow
-- Downloads playlists as MP3 files
-- Organizes output under `Output/<Artist>/<Artist - Album>/` by default
+- Downloads YouTube and SoundCloud playlist entries from a TOML file as MP3
+- Provides both GUI and CLI modes
+- Organizes output under `Output/<Artist>/<Album - Artist>/` by default
 - Applies artist, album, year, genre, title, and track number metadata
 - Embeds a custom cover image or preserves the original downloaded thumbnail
 - Can normalize audio with FFmpeg
 - Processes multiple playlists in parallel
-
-## Alpha Status
-
-This project is currently in alpha. The workflow is usable, but the interface and data model may still evolve.
 
 ## Requirements
 
 - Python 3.11 or newer
 - `yt-dlp`
 - FFmpeg
+
+`yt-dlp` and FFmpeg must both be available in your `PATH`.
 
 Python package metadata and dependencies are defined in `pyproject.toml`. `requirements.txt` installs the project in editable mode for local development.
 
@@ -48,16 +47,16 @@ python -m pip install -e .
 python -m pip install -U "yt-dlp[default]"
 ```
 
-4. Make sure `ffmpeg` is installed and available in your `PATH`.
+4. Make sure FFmpeg is installed and available in your `PATH`.
 
 ## Data Files
 
-The project now uses two TOML files:
+Two TOML files are used:
 
 - `playlists.toml`: playlist entries and metadata
 - `config.toml`: persistent runtime defaults
 
-CLI flags can override values from `config.toml` when needed.
+CLI flags and GUI controls can override values from `config.toml` when needed.
 
 ## `playlists.toml` Format
 
@@ -73,12 +72,6 @@ album = "Album Name"
 year = 2024
 genre = "Genre"
 cover_url = "https://example.com/cover.jpg"
-
-[[playlists]]
-url = "https://soundcloud.com/artist/sets/example-playlist"
-artist = "Another Artist"
-album = "Example Mixtape"
-genre = "Electronic"
 ```
 
 Supported playlist fields:
@@ -121,11 +114,9 @@ Supported settings:
 
 Settings are resolved in this order:
 
-1. CLI flags
+1. CLI flags or GUI controls
 2. `config.toml`
 3. Built-in defaults
-
-This means `config.toml` is used for usual preferences, while CLI flags remain available for temporary overrides.
 
 ## Cover Image Behavior
 
@@ -134,9 +125,9 @@ The `cover_url` field can contain:
 - A remote image URL such as `http://...` or `https://...`
 - A local file path to an image
 
-If a custom cover is provided, the script converts it to JPEG, saves it in the album folder, copies it to `Output/Covers/` by default, and embeds it into each MP3.
+If a custom cover is provided, the app converts it to JPEG, saves it in the album folder, copies it to `Output/Covers/` by default, and embeds it into each MP3.
 
-If no custom cover is provided, the script asks `yt-dlp` to embed the source thumbnail when possible.
+If no custom cover is provided, the app asks `yt-dlp` to embed the source thumbnail when possible.
 
 ## Usage
 
@@ -144,30 +135,6 @@ Run with the default files in the current directory:
 
 ```bash
 ytdlp-playlists
-```
-
-Run with a custom playlists file:
-
-```bash
-ytdlp-playlists my_playlists.toml
-```
-
-Run with a custom playlists file and cookies:
-
-```bash
-ytdlp-playlists my_playlists.toml --cookies youtube_cookies.txt
-```
-
-Run with a custom config file:
-
-```bash
-ytdlp-playlists my_playlists.toml --config my_config.toml
-```
-
-Run with runtime overrides:
-
-```bash
-ytdlp-playlists my_playlists.toml --config my_config.toml --output-dir MyMusic --max-workers 3 --keep-original-metadata false --enable-normalization true
 ```
 
 Show the built-in CLI help:
@@ -182,18 +149,12 @@ Run the GUI:
 ytdlp-playlists-gui
 ```
 
-The GUI keeps the same TOML workflow as the CLI. It provides file pickers for playlists, config, output, and cookies; runtime controls for max workers, metadata preservation, and normalization; an editable playlist table; and a log area that streams downloader output.
-
-Use `Add Row`, `Remove Row`, and `Save Playlists` to edit the selected `playlists.toml` file from the table. Use `Refresh Preview` to reload playlist rows from disk after external edits.
-
-The GUI layout is loaded from `src/ytdlp_playlists_downloader/gui/ui/main_window.ui`, so UI layout changes should be made there with Qt Designer. The window icon loads from `src/ytdlp_playlists_downloader/gui/assets/icon.png` when that file is present.
-
-Each CLI or GUI download run writes a timestamped local log file under `logs/`. The log includes the resolved runtime settings plus `yt-dlp` and script output. Use `--log-file custom.log` on the CLI to choose a specific log path.
+When running directly from a repository checkout, `python main.py` and `python -m gui.app` are also available as quick compatibility entry points.
 
 ## CLI Options
 
 - `playlists_file`: Optional path to the playlists TOML file. Default: `playlists.toml`
-- `--config`: Optional path to a config TOML file. If omitted, the script uses `config.toml` when present.
+- `--config`: Optional path to a config TOML file. If omitted, the app uses `config.toml` when present.
 - `--cookies`: Optional cookies file passed to `yt-dlp`
 - `--output-dir`: Base folder for downloads and the shared `Covers/` directory. Default: `Output`
 - `--max-workers`: Number of playlists processed in parallel. Default: `5`
@@ -209,16 +170,11 @@ Downloaded files are stored like this:
 Output/
   Covers/
   Artist Name/
-    Artist Name - Album Name/
+    Album Name - Artist Name/
       Song Title.mp3
       Artist Name-Album Name-cover.jpg
 ```
 
-## Notes
+## License
 
-- Supported platforms depend on `yt-dlp`.
-- YouTube and SoundCloud playlists are both supported use cases.
-- `config.toml` and `playlists.toml` are editable by hand and intended to replace the old spreadsheet workflow.
-- Cookies files and generated output foldpers should stay untracked in Git.
-- App icon from https://www.flaticon.com.
-- `python main.py` and `python -m gui.app` remain available as compatibility wrappers when running from the repository checkout.
+This project is licensed under the GNU General Public License v3.0. See [LICENSE](LICENSE) for the full license text.
