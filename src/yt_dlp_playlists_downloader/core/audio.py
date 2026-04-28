@@ -9,6 +9,7 @@ import subprocess
 import tempfile
 
 from .logging import log_message
+from .processes import hidden_subprocess_kwargs
 
 
 def analyze_loudness(file_path, logger=print):
@@ -17,7 +18,13 @@ def analyze_loudness(file_path, logger=print):
         "-filter_complex", "ebur128=framelog=verbose",
         "-f", "null", "-"
     ]
-    result = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+    result = subprocess.run(
+        cmd,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+        **hidden_subprocess_kwargs(),
+    )
     if result.returncode != 0:
         log_message(logger, f"FFmpeg analysis failed for {file_path}: {result.stderr}")
         return None
@@ -61,7 +68,13 @@ def normalize_audio(input_path, target_lufs=-15.0, tolerance=3.0, logger=print):
             output_path
         ]
 
-        result = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+        result = subprocess.run(
+            cmd,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            **hidden_subprocess_kwargs(),
+        )
         if result.returncode != 0:
             log_message(logger, f"FFmpeg normalization error for {input_path}: {result.stderr}")
             return False
