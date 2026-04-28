@@ -16,6 +16,7 @@ from yt_dlp_playlists_downloader.core.constants import (
 )
 from yt_dlp_playlists_downloader.core.downloader import run_download
 from yt_dlp_playlists_downloader.core.errors import DownloaderError
+from yt_dlp_playlists_downloader.core.logging import create_run_log_path
 from yt_dlp_playlists_downloader.core.playlists import PLAYLIST_COLUMNS, load_playlist_entries
 
 from .icon_service import apply_widget_icons
@@ -53,6 +54,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self._theme_actions: dict[str, QtGui.QAction] = {}
         self._is_loading_table = False
         self._has_unsaved_playlist_changes = False
+        self._last_log_path: Path | None = None
 
         self._load_ui()
         self._wire_ui()
@@ -100,6 +102,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self.removePlaylistRowButton.clicked.connect(self.remove_selected_playlist_rows)
         self.savePlaylistsButton.clicked.connect(self.save_playlists)
         self.runButton.clicked.connect(self.start_download)
+        self.openLogButton.clicked.connect(self.open_latest_log)
         self.previewTable.itemChanged.connect(self._on_playlist_table_changed)
 
         self.actionExit.triggered.connect(self.close)
@@ -319,6 +322,9 @@ class MainWindow(QtWidgets.QMainWindow):
                 self.statusBar().showMessage("Save playlist changes before running downloads.")
                 return
 
+        self._last_log_path = Path(create_run_log_path())
+        self.openLogButton.setEnabled(False)
+
         options = {
             "playlists_file_arg": self.playlistsEdit.text().strip() or None,
             "config_file_arg": self.configEdit.text().strip() or None,
@@ -327,6 +333,7 @@ class MainWindow(QtWidgets.QMainWindow):
             "keep_original_metadata": self.keepMetadataCheck.isChecked(),
             "enable_normalization": self.normalizeCheck.isChecked(),
             "cookies_file": self.cookiesEdit.text().strip() or None,
+            "log_file": str(self._last_log_path),
         }
 
         try:
@@ -344,6 +351,15 @@ class MainWindow(QtWidgets.QMainWindow):
         self._worker.completed.connect(self._on_download_completed)
         self._worker.start()
 
+    def open_latest_log(self) -> None:
+        if self._last_log_path is None or not self._last_log_path.is_file():
+            self.statusBar().showMessage("No log file is available yet.")
+            return
+
+        url = QtCore.QUrl.fromLocalFile(str(self._last_log_path.resolve()))
+        if not QtGui.QDesktopServices.openUrl(url):
+            self.statusBar().showMessage(f"Could not open log file: {self._last_log_path}")
+
     def _validate_options(self, options: dict[str, object]) -> None:
         config_data = load_config(options["config_file_arg"]) if options["config_file_arg"] else {}
         args = type("Args", (), options)()
@@ -352,6 +368,7 @@ class MainWindow(QtWidgets.QMainWindow):
     def _on_download_completed(self, success: bool, message: str) -> None:
         self.append_log(message)
         self._set_running(False)
+        self.openLogButton.setEnabled(self._last_log_path is not None and self._last_log_path.is_file())
         self.statusBar().showMessage("Download finished." if success else "Download failed.")
         self._worker = None
 

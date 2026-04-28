@@ -283,6 +283,16 @@
            </widget>
           </item>
           <item>
+           <widget class="QPushButton" name="openLogButton">
+            <property name="enabled">
+             <bool>false</bool>
+            </property>
+            <property name="text">
+             <string>Open Log</string>
+            </property>
+           </widget>
+          </item>
+          <item>
            <widget class="QProgressBar" name="progressBar">
             <property name="visible">
              <bool>false</bool>
