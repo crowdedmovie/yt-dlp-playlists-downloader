@@ -142,19 +142,19 @@ If no custom cover is provided, the app asks `yt-dlp` to embed the source thumbn
 Run with the default files in the current directory:
 
 ```bash
-ytdlp-playlists
+yt-dlp-playlists-downloader
 ```
 
 Show the built-in CLI help:
 
 ```bash
-ytdlp-playlists --help
+yt-dlp-playlists-downloader --help
 ```
 
 Run the GUI:
 
 ```bash
-ytdlp-playlists-gui
+yt-dlp-playlists-downloader-gui
 ```
 
 When running directly from a repository checkout, `python main.py` and `python -m gui.app` are also available as quick compatibility entry points.

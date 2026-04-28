@@ -12,8 +12,8 @@ if __package__ in (None, ""):
     package_parent = Path(__file__).resolve().parents[2]
     if str(package_parent) not in sys.path:
         sys.path.insert(0, str(package_parent))
-    from ytdlp_playlists_downloader.gui.main_window import MainWindow
-    from ytdlp_playlists_downloader.gui.theme_service import ensure_app
+    from yt_dlp_playlists_downloader.gui.main_window import MainWindow
+    from yt_dlp_playlists_downloader.gui.theme_service import ensure_app
 else:
     from .main_window import MainWindow
     from .theme_service import ensure_app

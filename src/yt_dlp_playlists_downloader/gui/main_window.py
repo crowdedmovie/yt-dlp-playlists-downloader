@@ -7,16 +7,16 @@ from pathlib import Path
 
 from qtpy import QtCore, QtGui, QtWidgets, uic
 
-from ytdlp_playlists_downloader.core.config import build_runtime_settings, load_config
-from ytdlp_playlists_downloader.core.constants import (
+from yt_dlp_playlists_downloader.core.config import build_runtime_settings, load_config
+from yt_dlp_playlists_downloader.core.constants import (
     DEFAULT_CONFIG_FILE,
     DEFAULT_MAX_WORKERS,
     DEFAULT_OUTPUT_DIR,
     DEFAULT_PLAYLISTS_FILE,
 )
-from ytdlp_playlists_downloader.core.downloader import run_download
-from ytdlp_playlists_downloader.core.errors import DownloaderError
-from ytdlp_playlists_downloader.core.playlists import PLAYLIST_COLUMNS, load_playlist_entries
+from yt_dlp_playlists_downloader.core.downloader import run_download
+from yt_dlp_playlists_downloader.core.errors import DownloaderError
+from yt_dlp_playlists_downloader.core.playlists import PLAYLIST_COLUMNS, load_playlist_entries
 
 from .icon_service import apply_widget_icons
 from .theme_service import apply_theme, available_theme_names, pick_startup_theme
@@ -61,11 +61,11 @@ class MainWindow(QtWidgets.QMainWindow):
         self.refresh_preview()
 
     def _load_ui(self) -> None:
-        ui_resource = importlib.resources.files("ytdlp_playlists_downloader.gui").joinpath("ui", "main_window.ui")
+        ui_resource = importlib.resources.files("yt_dlp_playlists_downloader.gui").joinpath("ui", "main_window.ui")
         with importlib.resources.as_file(ui_resource) as ui_file:
             uic.loadUi(str(ui_file), self)
 
-        icon_resource = importlib.resources.files("ytdlp_playlists_downloader.gui").joinpath(*WINDOW_ICON_REL_PATH)
+        icon_resource = importlib.resources.files("yt_dlp_playlists_downloader.gui").joinpath(*WINDOW_ICON_REL_PATH)
         with importlib.resources.as_file(icon_resource) as icon_file:
             if icon_file.exists():
                 icon = QtGui.QIcon(str(icon_file))
