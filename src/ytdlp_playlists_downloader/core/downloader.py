@@ -41,7 +41,7 @@ def download_playlist(
     os.makedirs(artist_dir, exist_ok=True)
 
     album_name = sanitize_name(album) if album else "Unknown Album"
-    folder_name = f"{artist_name} - {album_name}" if artist_name != "Unknown Artist" else album_name
+    folder_name = f"{album_name} - {artist_name}" if artist_name != "Unknown Artist" else album_name
     target_dir = os.path.join(artist_dir, folder_name)
     os.makedirs(target_dir, exist_ok=True)
 
