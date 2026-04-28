@@ -9,6 +9,12 @@ __pycache__/
 .venv/
 venv/
 env/
+*.egg-info/
+
+# Build
+build/
+dist/
+*.egg
 
 # Editor and OS files
 .vscode/
@@ -21,9 +27,6 @@ Output/
 Music/
 Covers/
 logs/
-
-# Local spreadsheet data
-local/
 
 # Local cookies
 youtube_cookies*.txt
