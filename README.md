@@ -30,15 +30,15 @@ People who want to download multiple playlists and tag them cleanly for use in m
 
 `yt-dlp` and FFmpeg must both be available in your `PATH`.
 
-Python package metadata and dependencies are defined in `pyproject.toml`. `requirements.txt` installs the project in editable mode for local development.
+Python package metadata and dependencies are defined in `pyproject.toml`.
 
 ## Installation
 
 1. Clone the repository.
-2. Install the project in editable mode:
+2. Install the app:
 
 ```bash
-python -m pip install -e .
+python -m pip install .
 ```
 
 3. Install `yt-dlp` if it is not already available:
@@ -48,6 +48,14 @@ python -m pip install -U "yt-dlp[default]"
 ```
 
 4. Make sure FFmpeg is installed and available in your `PATH`.
+
+For local development, install in editable mode instead:
+
+```bash
+python -m pip install -e .
+```
+
+`requirements.txt` also installs the project in editable mode for development workflows.
 
 ## Data Files
 
