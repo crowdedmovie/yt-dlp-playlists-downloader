@@ -11,6 +11,9 @@ venv/
 env/
 *.egg-info/
 
+# Build
+build/
+
 # Editor and OS files
 .vscode/
 .idea/
