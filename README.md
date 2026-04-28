@@ -34,7 +34,7 @@ Python package metadata and dependencies are defined in `pyproject.toml`.
 
 ## Installation
 
-1. Clone the repository.
+1. Clone the repository, or download latest release.
 2. Install the app:
 
 ```bash
