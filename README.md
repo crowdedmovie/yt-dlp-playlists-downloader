@@ -57,6 +57,8 @@ python -m pip install -e .
 
 `requirements.txt` also installs the project in editable mode for development workflows.
 
+The .ico file of the app icon is available in `gui/assets`, to be used for shortcut of the app. 
+
 ## Data Files
 
 On first run, the app creates default runtime files in a per-user app data folder:
