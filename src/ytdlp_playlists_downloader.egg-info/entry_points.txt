@@ -1,3 +1,0 @@
-[console_scripts]
-ytdlp-playlists = ytdlp_playlists_downloader.cli:main
-ytdlp-playlists-gui = ytdlp_playlists_downloader.gui.app:main

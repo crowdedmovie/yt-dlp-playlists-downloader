@@ -1,7 +1,0 @@
-requests>=2.31.0
-Pillow>=10.0.0
-mutagen>=1.47.0
-PyQt6<7,>=6.7
-qtpy<3,>=2.4
-qt-themes>=0.4.0
-qt-material-icons>=0.5.0
