@@ -6,7 +6,7 @@ import os
 import threading
 from datetime import datetime
 
-from .constants import DEFAULT_LOG_DIR
+from .paths import ensure_app_data_files, get_default_log_dir
 
 
 def log_message(logger, message):
@@ -33,6 +33,8 @@ def create_run_log_path(log_file=None):
     if log_file:
         return log_file
 
-    os.makedirs(DEFAULT_LOG_DIR, exist_ok=True)
+    ensure_app_data_files()
+    log_dir = get_default_log_dir()
+    os.makedirs(log_dir, exist_ok=True)
     timestamp = datetime.now().strftime("%Y%m%d-%H%M%S")
-    return os.path.join(DEFAULT_LOG_DIR, f"download-{timestamp}.log")
+    return str(log_dir / f"download-{timestamp}.log")

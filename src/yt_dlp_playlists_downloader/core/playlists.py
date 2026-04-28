@@ -6,13 +6,19 @@ import os
 
 from .constants import DEFAULT_PLAYLISTS_FILE
 from .errors import DownloaderError
+from .paths import ensure_app_data_files, get_default_playlists_path
 from .toml_io import load_toml_file
 
 PLAYLIST_COLUMNS = ["url", "artist", "album", "year", "genre", "cover_url"]
 
 
 def resolve_playlists_file(playlists_arg):
-    playlists_file = playlists_arg or DEFAULT_PLAYLISTS_FILE
+    if not playlists_arg:
+        ensure_app_data_files()
+        playlists_file = str(get_default_playlists_path())
+    else:
+        playlists_file = playlists_arg
+
     if not os.path.isfile(playlists_file):
         raise DownloaderError(
             f"Playlists file not found: {playlists_file}\n"

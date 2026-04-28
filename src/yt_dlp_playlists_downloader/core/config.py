@@ -12,6 +12,7 @@ from .constants import (
     DEFAULT_OUTPUT_DIR,
 )
 from .errors import DownloaderError
+from .paths import ensure_app_data_files, get_default_config_path
 from .toml_io import load_toml_file
 
 
@@ -21,10 +22,8 @@ def resolve_config_path(config_arg):
             raise DownloaderError(f"Config file not found: {config_arg}")
         return config_arg
 
-    if os.path.isfile(DEFAULT_CONFIG_FILE):
-        return DEFAULT_CONFIG_FILE
-
-    return None
+    ensure_app_data_files()
+    return str(get_default_config_path())
 
 
 def load_config(config_path):

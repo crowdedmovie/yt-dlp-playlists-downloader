@@ -9,14 +9,17 @@ from qtpy import QtCore, QtGui, QtWidgets, uic
 
 from yt_dlp_playlists_downloader.core.config import build_runtime_settings, load_config
 from yt_dlp_playlists_downloader.core.constants import (
-    DEFAULT_CONFIG_FILE,
     DEFAULT_MAX_WORKERS,
     DEFAULT_OUTPUT_DIR,
-    DEFAULT_PLAYLISTS_FILE,
 )
 from yt_dlp_playlists_downloader.core.downloader import run_download
 from yt_dlp_playlists_downloader.core.errors import DownloaderError
 from yt_dlp_playlists_downloader.core.logging import create_run_log_path
+from yt_dlp_playlists_downloader.core.paths import (
+    ensure_app_data_files,
+    get_default_config_path,
+    get_default_playlists_path,
+)
 from yt_dlp_playlists_downloader.core.playlists import PLAYLIST_COLUMNS, load_playlist_entries
 
 from .icon_service import apply_widget_icons
@@ -132,8 +135,9 @@ class MainWindow(QtWidgets.QMainWindow):
             self._on_theme_changed(theme_name)
 
     def _load_initial_values(self) -> None:
-        self.playlistsEdit.setText(DEFAULT_PLAYLISTS_FILE)
-        self.configEdit.setText(DEFAULT_CONFIG_FILE if Path(DEFAULT_CONFIG_FILE).is_file() else "")
+        ensure_app_data_files()
+        self.playlistsEdit.setText(str(get_default_playlists_path()))
+        self.configEdit.setText(str(get_default_config_path()))
         self.refresh_settings()
 
     def refresh_settings(self) -> None:
@@ -425,7 +429,8 @@ class MainWindow(QtWidgets.QMainWindow):
             self,
             "Usage",
             (
-                "Choose playlists.toml and config.toml files, then refresh settings or preview when needed.\n\n"
+                "The app creates default playlists.toml and config.toml files in its app data folder on first run.\n\n"
+                "Choose custom TOML files if needed, then refresh settings or preview after external edits.\n\n"
                 "Edit playlist rows directly in the table. Use Add Row and Remove Row to change the list, "
                 "then Save Playlists before running downloads.\n\n"
                 "Runtime settings in the GUI override config values for the current run."

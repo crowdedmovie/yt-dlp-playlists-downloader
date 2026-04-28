@@ -11,8 +11,6 @@ from .core.constants import (
     DEFAULT_LOG_DIR,
     DEFAULT_MAX_WORKERS,
     DEFAULT_OUTPUT_DIR,
-    DEFAULT_PLAYLISTS_FILE,
-    DEFAULT_CONFIG_FILE,
 )
 from .core.downloader import run_download
 from .core.errors import DownloaderError
@@ -37,16 +35,16 @@ def parse_args():
         "playlists_file",
         nargs="?",
         help=(
-            "Path to the playlists TOML file. If omitted, the script uses "
-            f"{DEFAULT_PLAYLISTS_FILE} in the current directory."
+            "Path to the playlists TOML file. If omitted, the app uses the "
+            "playlists.toml file in its app data folder."
         ),
     )
     parser.add_argument(
         "--config",
         dest="config_file",
         help=(
-            "Optional path to a config TOML file. If omitted, the script uses "
-            f"{DEFAULT_CONFIG_FILE} when present."
+            "Optional path to a config TOML file. If omitted, the app uses the "
+            "config.toml file in its app data folder."
         ),
     )
     parser.add_argument(
@@ -89,7 +87,7 @@ def parse_args():
         default=None,
         help=(
             "Optional path for the run log file. If omitted, a timestamped file is "
-            f"created under {DEFAULT_LOG_DIR}/."
+            f"created under the app data {DEFAULT_LOG_DIR}/ folder."
         ),
     )
     return parser.parse_args()

@@ -59,10 +59,18 @@ python -m pip install -e .
 
 ## Data Files
 
-Two TOML files are used:
+On first run, the app creates default runtime files in a per-user app data folder:
 
 - `playlists.toml`: playlist entries and metadata
 - `config.toml`: persistent runtime defaults
+- `logs/`: timestamped run logs
+
+The seeded `playlists.toml` starts empty so the app will not download anything until you add playlist entries.
+
+Default app data locations:
+
+- Windows: `%APPDATA%/yt-dlp-playlists-downloader/`
+- Linux: `$XDG_DATA_HOME/yt-dlp-playlists-downloader/`, or `~/.local/share/yt-dlp-playlists-downloader/` when `XDG_DATA_HOME` is not set
 
 CLI flags and GUI controls can override values from `config.toml` when needed.
 
@@ -139,7 +147,7 @@ If no custom cover is provided, the app asks `yt-dlp` to embed the source thumbn
 
 ## Usage
 
-Run with the default files in the current directory:
+Run with the default app-data files:
 
 ```bash
 yt-dlp-playlists-downloader
@@ -161,14 +169,14 @@ When running directly from a repository checkout, `python main.py` and `python -
 
 ## CLI Options
 
-- `playlists_file`: Optional path to the playlists TOML file. Default: `playlists.toml`
-- `--config`: Optional path to a config TOML file. If omitted, the app uses `config.toml` when present.
+- `playlists_file`: Optional path to the playlists TOML file. If omitted, the app uses `playlists.toml` from the app data folder.
+- `--config`: Optional path to a config TOML file. If omitted, the app uses `config.toml` from the app data folder.
 - `--cookies`: Optional cookies file passed to `yt-dlp`
 - `--output-dir`: Base folder for downloads and the shared `Covers/` directory. Default: `Output`
 - `--max-workers`: Number of playlists processed in parallel. Default: `5`
 - `--keep-original-metadata`: `true` or `false`. When playlist metadata fields are missing, keep existing tags if `true`, or clear them if `false`. Default: `true`
 - `--enable-normalization`: `true` or `false`. Enables FFmpeg loudness normalization after download and tagging. Default: `false`
-- `--log-file`: Optional path for the run log. If omitted, a timestamped log is created under `logs/`.
+- `--log-file`: Optional path for the run log. If omitted, a timestamped log is created under the app data `logs/` folder.
 
 ## Output Structure
 

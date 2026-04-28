@@ -31,4 +31,4 @@ package-dir = {"" = "src"}
 where = ["src"]
 
 [tool.setuptools.package-data]
-yt_dlp_playlists_downloader = ["gui/ui/*.ui", "gui/assets/*"]
+yt_dlp_playlists_downloader = ["gui/ui/*.ui", "gui/assets/*", "resources/*.toml"]

@@ -1,5 +1,6 @@
 """Shared defaults for CLI, GUI, and core downloader logic."""
 
+APP_NAME = "yt-dlp-playlists-downloader"
 DEFAULT_PLAYLISTS_FILE = "playlists.toml"
 DEFAULT_CONFIG_FILE = "config.toml"
 DEFAULT_OUTPUT_DIR = "Output"
