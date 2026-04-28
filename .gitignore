@@ -13,6 +13,8 @@ env/
 
 # Build
 build/
+dist/
+*.egg
 
 # Editor and OS files
 .vscode/
