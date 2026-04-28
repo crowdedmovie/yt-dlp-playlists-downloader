@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import importlib.resources
+import threading
 from pathlib import Path
 
 from qtpy import QtCore, QtGui, QtWidgets, uic
@@ -35,15 +36,22 @@ class DownloadWorker(QtCore.QThread):
     def __init__(self, options: dict[str, object]) -> None:
         super().__init__()
         self._options = options
+        self._stop_event = threading.Event()
 
     def run(self) -> None:
         try:
-            run_download(logger=self.log_line.emit, **self._options)
+            run_download(logger=self.log_line.emit, cancel_event=self._stop_event, **self._options)
         except Exception as exc:
             self.completed.emit(False, str(exc))
             return
 
-        self.completed.emit(True, "")
+        if self._stop_event.is_set():
+            self.completed.emit(False, "Download stopped.")
+        else:
+            self.completed.emit(True, "")
+
+    def stop(self) -> None:
+        self._stop_event.set()
 
 
 class MainWindow(QtWidgets.QMainWindow):
@@ -105,6 +113,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self.removePlaylistRowButton.clicked.connect(self.remove_selected_playlist_rows)
         self.savePlaylistsButton.clicked.connect(self.save_playlists)
         self.runButton.clicked.connect(self.start_download)
+        self.stopButton.clicked.connect(self.stop_download)
         self.openLogButton.clicked.connect(self.open_latest_log)
         self.previewTable.itemChanged.connect(self._on_playlist_table_changed)
 
@@ -210,7 +219,7 @@ class MainWindow(QtWidgets.QMainWindow):
 
     def refresh_preview(self) -> None:
         try:
-            tasks = load_playlist_entries(self.playlistsEdit.text().strip() or DEFAULT_PLAYLISTS_FILE)
+            tasks = load_playlist_entries(self.playlistsEdit.text().strip())
         except DownloaderError as exc:
             self._is_loading_table = True
             self.previewTable.setRowCount(0)
@@ -256,7 +265,7 @@ class MainWindow(QtWidgets.QMainWindow):
     def save_playlists(self) -> None:
         try:
             entries = self._playlist_entries_from_table()
-            self._write_playlists_file(self.playlistsEdit.text().strip() or DEFAULT_PLAYLISTS_FILE, entries)
+            self._write_playlists_file(self.playlistsEdit.text().strip(), entries)
         except DownloaderError as exc:
             self.append_log(str(exc))
             self.statusBar().showMessage("Could not save playlists.")
@@ -264,7 +273,7 @@ class MainWindow(QtWidgets.QMainWindow):
 
         self.statusBar().showMessage(f"Saved {len(entries)} playlist row(s).")
         self._set_unsaved_playlist_changes(False)
-        self.append_log(f"Saved playlists file: {self.playlistsEdit.text().strip() or DEFAULT_PLAYLISTS_FILE}")
+        self.append_log(f"Saved playlists file: {self.playlistsEdit.text().strip()}")
 
     def _playlist_entries_from_table(self) -> list[dict[str, str]]:
         entries = []
@@ -355,6 +364,15 @@ class MainWindow(QtWidgets.QMainWindow):
         self._worker.completed.connect(self._on_download_completed)
         self._worker.start()
 
+    def stop_download(self) -> None:
+        if self._worker is None or not self._worker.isRunning():
+            return
+
+        self.append_log("Stop requested. Waiting for active processes to exit...")
+        self.statusBar().showMessage("Stopping download...")
+        self.stopButton.setEnabled(False)
+        self._worker.stop()
+
     def open_latest_log(self) -> None:
         if self._last_log_path is None or not self._last_log_path.is_file():
             self.statusBar().showMessage("No log file is available yet.")
@@ -393,6 +411,7 @@ class MainWindow(QtWidgets.QMainWindow):
             self.runButton,
         ]:
             widget.setEnabled(not is_running)
+        self.stopButton.setEnabled(is_running)
         self.progressBar.setVisible(is_running)
 
     def append_log(self, message: str) -> None:

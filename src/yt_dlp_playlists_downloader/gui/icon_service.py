@@ -17,6 +17,7 @@ _ICON_MAP: dict[str, tuple[str, int]] = {
     "removePlaylistRowButton": ("remove", 20),
     "savePlaylistsButton": ("save", 20),
     "runButton": ("download", 20),
+    "stopButton": ("stop", 20),
     "openLogButton": ("article", 20),
 }
 

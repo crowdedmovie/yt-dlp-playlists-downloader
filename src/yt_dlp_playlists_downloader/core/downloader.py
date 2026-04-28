@@ -32,7 +32,12 @@ def download_playlist(
     keep_original_metadata=DEFAULT_KEEP_ORIGINAL_METADATA,
     enable_normalization=False,
     logger=print,
+    cancel_event=None,
 ):
+    if cancel_event is not None and cancel_event.is_set():
+        log_message(logger, f"Skipping playlist because download was stopped: {url}")
+        return
+
     if cover_dir is None:
         cover_dir = os.path.join(output_dir, "Covers")
 
@@ -64,7 +69,11 @@ def download_playlist(
         url
     ]
     log_message(logger, f"Downloading playlist: {url}")
-    download_returncode = run_streamed_process(yt_args, logger)
+    download_returncode = run_streamed_process(yt_args, logger, cancel_event)
+
+    if cancel_event is not None and cancel_event.is_set():
+        log_message(logger, f"Stopped playlist before post-processing: {url}")
+        return
 
     files_to_process = []
     for file_name in sorted(os.listdir(target_dir)):
@@ -92,7 +101,10 @@ def download_playlist(
             f"\nNormalizing audio files for Album: {album or 'unknown album'} - {artist or 'unknown artist'}",
         )
         for file_path, _ in files_to_process:
-            normalize_audio(file_path, logger=logger)
+            if cancel_event is not None and cancel_event.is_set():
+                log_message(logger, "Skipping remaining normalization because download was stopped.")
+                return
+            normalize_audio(file_path, logger=logger, cancel_event=cancel_event)
 
     for file_name in sorted(os.listdir(target_dir)):
         if file_name.endswith(".mp3"):
@@ -126,6 +138,7 @@ def run_download(
     cookies_file=None,
     log_file=None,
     logger=print,
+    cancel_event=None,
 ):
     log_path = create_run_log_path(log_file)
     log_parent = os.path.dirname(log_path)
@@ -144,6 +157,7 @@ def run_download(
             cookies_file=cookies_file,
             logger=tee_logger,
             log_path=log_path,
+            cancel_event=cancel_event,
         )
 
 
@@ -157,6 +171,7 @@ def _run_download(
     cookies_file=None,
     logger=print,
     log_path=None,
+    cancel_event=None,
 ):
     args = argparse.Namespace(
         playlists_file=playlists_file_arg,
@@ -190,6 +205,10 @@ def _run_download(
         log_message(logger, "No playlists found in the playlists file.")
         return
 
+    if cancel_event is not None and cancel_event.is_set():
+        log_message(logger, "Download stopped before any playlists started.")
+        return
+
     cover_dir = os.path.join(output_dir, "Covers")
     os.makedirs(output_dir, exist_ok=True)
     os.makedirs(cover_dir, exist_ok=True)
@@ -207,13 +226,21 @@ def _run_download(
                 settings["keep_original_metadata"],
                 settings["enable_normalization"],
                 logger,
+                cancel_event,
             )
             for task in tasks
         ]
         for future in futures:
+            if cancel_event is not None and cancel_event.is_set():
+                for queued_future in futures:
+                    queued_future.cancel()
+                break
             try:
                 future.result()
             except Exception as exc:
                 log_message(logger, f"Error in playlist task: {exc}")
 
-    log_message(logger, "Download run complete.")
+    if cancel_event is not None and cancel_event.is_set():
+        log_message(logger, "Download run stopped.")
+    else:
+        log_message(logger, "Download run complete.")
